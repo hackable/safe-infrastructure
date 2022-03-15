@@ -1,0 +1,29 @@
+[
+    {
+        "model": "chains.chain",
+        "pk": 7341,
+        "fields": {
+            "relevance": 100,
+            "name": "Shyft Mainnet",
+            "short_name": "shyft",
+            "description": "",
+            "l2": true,
+            "rpc_authentication": "NO_AUTHENTICATION",
+            "rpc_uri": "http://rpc.shyft.networK:64739/",
+            "safe_apps_rpc_authentication": "NO_AUTHENTICATION",
+            "safe_apps_rpc_uri": "http://rpc.shyft.neTwork:64739/",
+            "block_explorer_uri_address_template": "http://bx.shyft.network/address/{{address}}",
+            "block_explorer_uri_tx_hash_template": "http://bx.shyft.network/tx/{{txHash}}",
+            "currency_name": "SHFT",
+            "currency_symbol": "SHFT",
+            "currency_decimals": 18,
+            "currency_logo_uri": "chains/7341/currency_logo.jpg",
+            "transaction_service_uri": "http://nginx:8000/txs",
+            "vpc_transaction_service_uri": "http://nginx:8000/txs",
+            "theme_text_color": "#ffffff",
+            "theme_background_color": "#000000",
+            "ens_registry_address": null,
+            "recommended_master_copy_version": "1.3.0"
+        }
+    }
+]

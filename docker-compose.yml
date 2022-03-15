@@ -1,0 +1,99 @@
+version: '3.8'
+
+volumes:
+  nginx-shared-txs:
+  nginx-shared-cfg:
+
+services:
+
+  # Common nginx and database
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${REVERSE_PROXY_PORT}:8000"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-shared-txs:/nginx-txs
+      - nginx-shared-cfg:/nginx-cfg
+    depends_on:
+      - txs-web
+      - cfg-web
+      - cgw-web
+
+  db:
+    image: postgres:10-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+
+  # Safe Transaction Service
+  txs-redis:
+    image: redis:alpine
+
+  txs-web:
+    image: gnosispm/safe-transaction-service:${TXS_VERSION}
+    env_file:
+      - container_env_files/txs.env
+    environment:
+      - ETHEREUM_NODE_URL=${RPC_NODE_URL}
+    depends_on:
+      - db
+      - txs-redis
+    working_dir: /app
+    volumes:
+      - nginx-shared-txs:/nginx
+      - ./overwrites/setup_service.py:/app/safe_transaction_service/history/management/commands/setup_service.py
+      - ./overwrites/safe_service.py:/app/safe_transaction_service/history/services/safe_service.py
+
+    command: docker/web/run_web.sh
+
+  txs-worker: &worker
+    image: gnosispm/safe-transaction-service:${TXS_VERSION}
+    env_file:
+      - container_env_files/txs.env
+    environment:
+      - ETHEREUM_NODE_URL=${RPC_NODE_URL}
+    depends_on:
+      - db
+      - txs-redis
+    command: docker/web/celery/worker/run.sh
+    volumes:
+      - ./overwrites/safe_service.py:/app/safe_transaction_service/history/services/safe_service.py
+
+  txs-scheduler:
+    <<: *worker
+    command: docker/web/celery/scheduler/run.sh
+
+  # Safe Config Service
+  cfg-web:
+    image: gnosispm/safe-config-service:${CFG_VERSION}
+    tty: true
+    volumes:
+      - nginx-shared-cfg:/nginx
+    env_file:
+      - container_env_files/cfg.env
+    depends_on:
+      - db
+
+  # Safe Client Gateway
+  cgw-redis:
+    image: redis:alpine
+
+  cgw-web:
+    image: gnosispm/safe-client-gateway:${CGW_VERSION}
+    env_file:
+      - container_env_files/cgw.env
+    depends_on:
+      - cgw-redis
+
+  ui:
+    image: gnosispm/safe-react
+    env_file:
+      - container_env_files/ui.env
+    depends_on:
+      - nginx
+    ports:
+      - "${REVERSE_PROXY_UI_PORT}:3000"
+    volumes:
+      - ./overwrites/package.json:/app/package.json
