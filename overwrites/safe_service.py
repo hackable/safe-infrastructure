@@ -11,12 +11,66 @@ from gnosis.eth.contracts import get_cpk_factory_contract, get_proxy_factory_con
 from gnosis.safe import Safe
 from gnosis.safe.exceptions import CannotRetrieveSafeInfoException
 from gnosis.safe.safe import SafeInfo
+from web3.types import BlockIdentifier, Wei
 
 from ..exceptions import NodeConnectionException
 from ..models import InternalTx
 
 logger = logging.getLogger(__name__)
 
+
+
+class SafeCustom(Safe):
+    def retrieve_all_info(
+        self, block_identifier: Optional[BlockIdentifier] = "latest"
+    ) -> SafeInfo:
+        """
+        Get all Safe info in the same batch call.
+        :param block_identifier:
+        :return:
+        :raises: CannotRetrieveSafeInfoException
+        """
+        try:
+            contract = self.get_contract()
+            master_copy = self.retrieve_master_copy_address()
+            fallback_handler = self.retrieve_fallback_handler()
+            guard = self.retrieve_guard()
+
+            results = self.ethereum_client.batch_call(
+                [
+                    contract.functions.getModulesPaginated(
+                        SENTINEL_ADDRESS, 20
+                    ),  # Does not exist in version < 1.1.1
+                    contract.functions.nonce(),
+                    contract.functions.getOwners(),
+                    contract.functions.getThreshold(),
+                    contract.functions.VERSION(),
+                ],
+                # Nethermind RPC Call Fix
+                from_address=NULL_ADDRESS,
+                block_identifier=block_identifier,
+                raise_exception=False,
+            )
+            modules_response, nonce, owners, threshold, version = results
+            if modules_response:
+                modules, next_module = modules_response
+            if (
+                not modules_response or next_module != SENTINEL_ADDRESS
+            ):  # < 1.1.1 or still more elements in the list
+                modules = self.retrieve_modules()
+            return SafeInfo(
+                self.address,
+                fallback_handler,
+                guard,
+                master_copy,
+                modules,
+                nonce,
+                owners,
+                threshold,
+                version,
+            )
+        except (ValueError, BadFunctionCallOutput) as e:
+            raise CannotRetrieveSafeInfoException(self.address) from e
 
 class SafeServiceException(Exception):
     pass
@@ -118,10 +172,8 @@ class SafeService:
         )
 
     def get_safe_info(self, safe_address: str) -> SafeInfo:
-        # Nethermind RPC Call Fix
-        safe_address = NULL_ADDRESS
         try:
-            safe = Safe(safe_address, self.ethereum_client)
+            safe = SafeCustom(safe_address, self.ethereum_client)
             return safe.retrieve_all_info()
         except IOError as exc:
             raise NodeConnectionException from exc

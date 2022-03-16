@@ -71,6 +71,7 @@ services:
     tty: true
     volumes:
       - nginx-shared-cfg:/nginx
+      - ./json:/json
     env_file:
       - container_env_files/cfg.env
     depends_on:
